@@ -1,4 +1,5 @@
 defmodule TPS.Chat do
+  alias Tps.Chat.Message
   require Logger
   use GenServer
 
@@ -10,9 +11,13 @@ defmodule TPS.Chat do
 
   @impl true
   def handle_cast({:push, message}, clients) do
+    m = Message.parse_message(message)
+
+    Logger.warning("#{inspect(m)}")
+
     clients
     |> Enum.each(fn socket ->
-      write_line("#{message} -> #{Time.utc_now()}\n", socket)
+      write_line("#{m.key}: #{m.message} -> #{Time.utc_now()}\n", socket)
     end)
 
     {:noreply, clients}
@@ -49,8 +54,6 @@ defmodule TPS.Chat do
   end
 
   def push_message(type, opts) do
-    IO.inspect(type)
-    IO.inspect(opts)
     GenServer.cast(__MODULE__, {type, opts})
   end
 

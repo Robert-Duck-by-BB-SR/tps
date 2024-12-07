@@ -11,7 +11,12 @@ defmodule TPS do
 
   def accept(port) do
     {:ok, socket} =
-      :gen_tcp.listen(port, [:binary, packet: :line, active: false, reuseaddr: true])
+      :gen_tcp.listen(port, [
+        :binary,
+        packet: :line,
+        active: false,
+        reuseaddr: true
+      ])
 
     Logger.info("Acception connections on port #{port}")
     loop_acceptor(socket)
@@ -32,13 +37,13 @@ defmodule TPS do
   defp read_line(socket) do
     case :gen_tcp.recv(socket, 0) do
       {:ok, data} ->
-        Logger.info("printing lcients")
+        Logger.info(data)
         IO.inspect(Chat.print_clients())
         message = String.trim(data)
         Chat.push_message(:push, message)
         read_line(socket)
 
-      {:error, :close} ->
+      {:error, :closed} ->
         Chat.remove_connection(socket)
         :ok
     end
