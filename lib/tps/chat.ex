@@ -5,7 +5,6 @@ defmodule TPS.Chat do
 
   @impl true
   def init(:ok) do
-    Logger.info("init?")
     {:ok, []}
   end
 
@@ -45,7 +44,6 @@ defmodule TPS.Chat do
   end
 
   def start_link(opts) do
-    Logger.info("start link?")
     GenServer.start_link(__MODULE__, :ok, opts)
   end
 
