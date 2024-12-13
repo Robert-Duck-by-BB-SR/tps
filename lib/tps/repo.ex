@@ -1,4 +1,5 @@
 defmodule TPS.Repo do
+  require Logger
   use GenServer
   require Exqlite
 
@@ -9,15 +10,28 @@ defmodule TPS.Repo do
 
   @impl true
   def handle_cast({:exec, query, values}, conn) do
-    {:ok, statement} =
-      conn
-      |> Exqlite.Sqlite3.prepare(query)
+    Logger.info("hello????")
 
-    :ok = Exqlite.Sqlite3.bind(conn, statement, values)
+    IO.inspect("waht?")
+    st = Exqlite.Sqlite3.prepare(conn, query)
 
-    Exqlite.Sqlite3.step(conn, statement)
+    Logger.info(st)
+    {:ok, statement} = st
+
+    :ok = Exqlite.Sqlite3.bind(statement, values)
+    Logger.info("yes we are good")
+
+    result = Exqlite.Sqlite3.step(conn, statement)
+    Logger.info(result)
     Exqlite.Sqlite3.release(conn, statement)
     {:noreply, conn}
+  end
+
+  @impl true
+  def handle_cast(bro, what) do
+    Logger.info(bro)
+    Logger.info(what)
+    {:noreply, what}
   end
 
   @impl true
@@ -26,13 +40,9 @@ defmodule TPS.Repo do
       conn
       |> Exqlite.Sqlite3.prepare(query)
 
-    :ok = Exqlite.Sqlite3.bind(conn, statement, values)
+    :ok = Exqlite.Sqlite3.bind(statement, values)
 
     case Exqlite.Sqlite3.multi_step(conn, statement) do
-      {:busy} ->
-        Exqlite.Sqlite3.release(conn, statement)
-        {:stop, :busy, "database is busy", conn}
-
       {:error, reason} ->
         Exqlite.Sqlite3.release(conn, statement)
         {:stop, :error, reason, conn}
@@ -44,30 +54,29 @@ defmodule TPS.Repo do
   end
 
   @impl true
-  def handle_call({:select, query, values}, _from, conn) do
+  def handle_call({:get, query, values}, _from, conn) do
     {:ok, statement} =
       conn
       |> Exqlite.Sqlite3.prepare(query)
 
-    :ok = Exqlite.Sqlite3.bind(conn, statement, values)
+    :ok = Exqlite.Sqlite3.bind(statement, values)
 
     case Exqlite.Sqlite3.step(conn, statement) do
-      {:busy} ->
-        Exqlite.Sqlite3.release(conn, statement)
-        {:stop, :busy, "database is busy", conn}
-
       {:error, reason} ->
         Exqlite.Sqlite3.release(conn, statement)
         {:stop, :error, reason, conn}
 
-      {result} ->
+      {:row, result} ->
         Exqlite.Sqlite3.release(conn, statement)
         {:reply, result, conn}
+
+      :done ->
+        {:reply, :success, conn}
     end
   end
 
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, :ok, opts)
+  def start_link([name, opts]) do
+    GenServer.start_link(__MODULE__, name, opts)
   end
 
   def collect(type, query, values) do
@@ -75,6 +84,8 @@ defmodule TPS.Repo do
   end
 
   def exec(query, values) do
+    Logger.info(query)
+    Logger.info(values)
     GenServer.cast(__MODULE__, {:exec, query, values})
   end
 end

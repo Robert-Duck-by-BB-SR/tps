@@ -10,6 +10,7 @@ create table if not exists message(
     user text not null,
     conversation text not null,
     datetime text not null,
+    content blob not null,
     foreign key(user) references user(id) on delete cascade,
     foreign key(conversation) references conversation(id) on delete cascade
 );

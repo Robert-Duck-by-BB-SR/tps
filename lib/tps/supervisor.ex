@@ -9,7 +9,7 @@ defmodule TPS.Supervisor do
   def init(:ok) do
     children = [
       {TPS.Chat, name: TPS.Chat},
-      {TPS.Repo, "testing.db"}
+      {TPS.Repo, ["testing.db", [name: TPS.Repo]]}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
