@@ -39,7 +39,7 @@ defmodule Mix.Tasks.Tps.Users do
     new_key =
       :crypto.hash(:sha256, encoded_username |> Enum.join(new_id))
 
-    Repo.collect(:get, Repo.User.new(), [new_id, username, new_key])
+    Repo.query(:get, Repo.User.new(), [new_id, username, new_key])
     |> IO.puts()
 
     IO.inspect(Base.encode16(new_key))
