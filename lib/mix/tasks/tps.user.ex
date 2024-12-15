@@ -12,21 +12,6 @@ defmodule Mix.Tasks.Tps.Users do
   alias TPS.Repo
   alias TPS.Supervisor
 
-  def encode(left, right) do
-    lbytes = :binary.bin_to_list(left)
-    rbytes = :binary.bin_to_list(right)
-
-    Enum.zip(lbytes, rbytes)
-    |> Enum.map(fn {l, r} -> rem(l - r, 256) end)
-  end
-
-  def decode(left, right) do
-    rbytes = :binary.bin_to_list(right)
-
-    Enum.zip(left, rbytes)
-    |> Enum.map(fn {l, r} -> rem(l + r, 256) end)
-  end
-
   def run(["create", username]) do
     Mix.shell().info("Creating a user")
     System.get_env("serv_key")
@@ -34,12 +19,12 @@ defmodule Mix.Tasks.Tps.Users do
 
     new_id = UUID.uuid4()
     [_, server_secret] = File.read!(".env") |> String.split("=", trim: true)
-    encoded_username = encode(username, server_secret)
+    encoded_username = TPS.NinjaHash.encode(username, server_secret)
 
     new_key =
       :crypto.hash(:sha256, encoded_username |> Enum.join(new_id))
 
-    Repo.query(:get, Repo.User.new(), [new_id, username, new_key])
+    Repo.query_raw(:get, Repo.User.new(), [new_id, username, new_key])
     |> IO.puts()
 
     IO.inspect(Base.encode16(new_key))

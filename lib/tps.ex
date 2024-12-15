@@ -38,9 +38,13 @@ defmodule TPS do
     case :gen_tcp.recv(socket, 0) do
       {:ok, data} ->
         Logger.info(data)
-        IO.inspect(Chat.print_clients())
         message = String.trim(data)
-        Chat.push_message(:push, message)
+
+        case Chat.Message.parse_incoming(message) do
+          {:message, m} -> Chat.push_message(:push, m)
+          {:req, r} -> "#{Chat.request(r)}\n" |> Chat.write_line(socket)
+        end
+
         read_line(socket)
 
       {:error, :closed} ->

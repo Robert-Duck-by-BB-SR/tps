@@ -1,5 +1,7 @@
 defmodule TPS.Chat do
-  alias Tps.Chat.Message
+  alias TPS.Repo
+  alias TPS.Repo.Message
+  alias TPS.Chat.Message
   require Logger
   use GenServer
 
@@ -10,7 +12,7 @@ defmodule TPS.Chat do
 
   @impl true
   def handle_cast({:push, message}, clients) do
-    m = Message.parse_message(message)
+    m = Message.parse_incoming(message)
 
     Logger.warning("#{inspect(m)}")
 
@@ -43,6 +45,14 @@ defmodule TPS.Chat do
     {:reply, :ok, clients}
   end
 
+  @impl true
+  def handle_call({:request, message}, _from, clients) do
+    req = Message.parse_request(message)
+    {:ok, result} = Repo.query(req)
+    Logger.warning(result)
+    {:reply, result, clients}
+  end
+
   def start_link(opts) do
     GenServer.start_link(__MODULE__, :ok, opts)
   end
@@ -59,7 +69,11 @@ defmodule TPS.Chat do
     GenServer.cast(__MODULE__, {:remove, socket})
   end
 
-  defp write_line(line, socket) do
+  def request(message) do
+    GenServer.call(__MODULE__, {:request, message})
+  end
+
+  def write_line(line, socket) do
     :gen_tcp.send(socket, line)
   end
 end

@@ -1,4 +1,5 @@
 defmodule TPS.Repo do
+  alias TPS.Repo
   require Logger
   use GenServer
   require Exqlite
@@ -49,11 +50,55 @@ defmodule TPS.Repo do
     end
   end
 
+  @impl true
+  def handle_call([["get", "conversation"], ["key", key] | _], _from, conn) do
+    with {:ok, [username]} <- Repo.User.username(conn, key),
+         {:ok, rows} <- Repo.Conversation.conversations_by_username(conn, username) do
+      conversations =
+        rows
+        |> Enum.reduce("", fn row, acc ->
+          [id, users] = row
+          "#{acc};#{id}:#{users}"
+        end)
+
+      {:reply, {:ok, conversations}, conn}
+    else
+      {:error, reason} ->
+        Logger.error(reason)
+        {:reply, {:error, reason}, conn}
+    end
+  end
+
+  @impl true
+  def handle_call([["get", "users"] | _], _from, conn) do
+    case Repo.User.users(conn) do
+      {:error, reason} ->
+        Logger.error(reason)
+        {:reply, {:error, reason}, conn}
+
+      {:ok, users} ->
+        Logger.warning("printing users")
+        IO.inspect(users)
+
+        usernames =
+          users
+          |> Enum.join(";")
+
+        IO.inspect(usernames)
+
+        {:reply, {:ok, usernames}, conn}
+    end
+  end
+
   def start_link([name, opts]) do
     GenServer.start_link(__MODULE__, name, opts)
   end
 
-  def query(type, query_string, values) do
+  def query_raw(type, query_string, values) do
     GenServer.call(__MODULE__, {type, query_string, values})
+  end
+
+  def query(request) do
+    GenServer.call(__MODULE__, request)
   end
 end
