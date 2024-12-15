@@ -1,6 +1,5 @@
 defmodule TPS.Chat do
   alias TPS.Repo
-  alias TPS.Repo.Message
   alias TPS.Chat.Message
   require Logger
   use GenServer
@@ -12,13 +11,20 @@ defmodule TPS.Chat do
 
   @impl true
   def handle_cast({:push, message}, clients) do
-    m = Message.parse_incoming(message)
+    m = Message.parse_message(message)
 
     Logger.warning("#{inspect(m)}")
 
+    datetime = Time.utc_now()
+
+    {:ok, response} =
+      Repo.push_message([m.type, m.key, m.convo, datetime, m.message])
+
+    Logger.warning(response)
+
     clients
     |> Enum.each(fn socket ->
-      write_line("#{m.key}: #{m.message} -> #{Time.utc_now()}\n", socket)
+      write_line(response, socket)
     end)
 
     {:noreply, clients}

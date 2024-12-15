@@ -16,7 +16,7 @@ defmodule TPS.Chat.Message do
         <<version::8, key_len::8, key::binary-size(key_len), convo::binary-size(36), type::8,
           message::binary>>
       ) do
-    {:message, %Message{version: version, convo: convo, key: key, type: type, message: message}}
+    %Message{version: version, convo: convo, key: key, type: type, message: message}
   end
 
   def parse_message(_) do

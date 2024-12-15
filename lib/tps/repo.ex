@@ -74,11 +74,33 @@ defmodule TPS.Repo do
         _from,
         conn
       ) do
+    Logger.warning(key)
+    Logger.warning(conversation)
+    {:ok, decoded_key} = Base.decode16(key)
+
+    with {:ok, _} <- Repo.User.username(conn, decoded_key),
+         {:ok, rows} <-
+           Repo.Message.messages_in_convo(conn, conversation) do
+      messages =
+        rows
+        |> Enum.reduce("", fn row, acc ->
+          [_id, type, user, conversation, datetime, message] = row
+          "#{acc};#{type}|#{user}|#{conversation}|#{datetime}|#{message}"
+        end)
+
+      {:reply, {:ok, messages}, conn}
+    else
+      {:error, reason} ->
+        Logger.error(reason)
+        {:reply, {:error, reason}, conn}
+    end
   end
 
   @impl true
   def handle_call([["get", "conversation"], ["key", key] | _], _from, conn) do
-    with {:ok, [username]} <- Repo.User.username(conn, key),
+    {:ok, decoded_key} = Base.decode16(key)
+
+    with {:ok, [username]} <- Repo.User.username(conn, decoded_key),
          {:ok, rows} <- Repo.Conversation.conversations_by_username(conn, username) do
       conversations =
         rows
@@ -116,12 +138,30 @@ defmodule TPS.Repo do
     end
   end
 
+  @impl true
+  def handle_call([type, key, conversation, datetime, message], _from, conn) do
+    {:ok, decoded_key} = Base.decode16(key)
+
+    with {:ok, [username]} <- Repo.User.username(conn, decoded_key),
+         :ok <- Repo.Message.new_message(conn, [type, username, conversation, datetime, message]) do
+      {:reply, {:ok, "#{type}|#{username}|#{conversation}|#{datetime}|#{message}\n"}, conn}
+    else
+      {:error, reason} ->
+        Logger.error(reason)
+        {:reply, {:error, reason}, conn}
+    end
+  end
+
   def start_link([name, opts]) do
     GenServer.start_link(__MODULE__, name, opts)
   end
 
   def query_raw(type, query_string, values) do
     GenServer.call(__MODULE__, {type, query_string, values})
+  end
+
+  def push_message([type, key, conversation, datetime, message]) do
+    GenServer.call(__MODULE__, [type, key, conversation, datetime, message])
   end
 
   def query(request) do
