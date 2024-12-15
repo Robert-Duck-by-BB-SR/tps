@@ -6,7 +6,7 @@ defmodule TPS.Repo.User do
       conn
       |> Exqlite.Sqlite3.prepare("select username from user where key=?1")
 
-    :ok = Exqlite.Sqlite3.bind(statement, key)
+    :ok = Exqlite.Sqlite3.bind(statement, [key])
 
     case Exqlite.Sqlite3.step(conn, statement) do
       {:error, reason} ->
@@ -16,6 +16,9 @@ defmodule TPS.Repo.User do
       {:row, result} ->
         Exqlite.Sqlite3.release(conn, statement)
         {:ok, result}
+
+      :done ->
+        :not_found
     end
   end
 

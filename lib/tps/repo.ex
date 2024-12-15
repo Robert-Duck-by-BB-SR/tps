@@ -51,6 +51,32 @@ defmodule TPS.Repo do
   end
 
   @impl true
+  def handle_call([["create", "conversation"], ["key", key], ["users", users]], _from, conn) do
+    {:ok, decoded_key} = Base.decode16(key)
+
+    with {:ok, [username]} <- Repo.User.username(conn, decoded_key),
+         {:ok, id} <- Repo.Conversation.new_convo(conn, "#{username}|#{users}") do
+      {:reply, {:ok, id}, conn}
+    else
+      {:error, reason} ->
+        Logger.error(reason)
+        {:reply, {:error, reason}, conn}
+    end
+  end
+
+  @impl true
+  def handle_call(
+        [
+          ["get", "messages"],
+          ["key", key],
+          ["conversation", conversation]
+        ],
+        _from,
+        conn
+      ) do
+  end
+
+  @impl true
   def handle_call([["get", "conversation"], ["key", key] | _], _from, conn) do
     with {:ok, [username]} <- Repo.User.username(conn, key),
          {:ok, rows} <- Repo.Conversation.conversations_by_username(conn, username) do
