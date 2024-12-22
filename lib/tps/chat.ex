@@ -6,7 +6,7 @@ defmodule TPS.Chat do
 
   @impl true
   def init(:ok) do
-    {:ok, []}
+    {:ok, %{}}
   end
 
   @impl true
@@ -17,33 +17,51 @@ defmodule TPS.Chat do
 
     datetime = Time.utc_now()
 
+    convo = Repo.get_conversation(m.convo) |> String.split("|", trim: true)
+
     {:ok, response} =
       Repo.push_message([m.type, m.key, m.convo, datetime, m.message])
 
     Logger.warning(response)
 
-    clients
-    |> Enum.each(fn socket ->
-      write_line(response, socket)
+    convo
+    |> Enum.each(fn username ->
+      case Map.fetch(clients, username) do
+        {:ok, c} ->
+          c
+          |> Enum.each(fn socket ->
+            write_line(response, socket)
+          end)
+
+        :error ->
+          nil
+      end
     end)
 
     {:noreply, clients}
   end
 
   @impl true
-  def handle_cast({:connect, socket}, clients) do
-    Logger.info("connect")
+  def handle_cast({:connect, {username, socket}}, clients) do
+    existing_clients =
+      case Map.fetch(clients, username) do
+        {:ok, c} -> c
+        :error -> []
+      end
 
-    clients
-    |> Enum.each(fn socket -> write_line("connected!\n", socket) end)
-
-    {:noreply, [socket | clients]}
+    {:noreply, Map.put(clients, username, [socket | existing_clients])}
   end
 
   @impl true
-  def handle_cast({:remove, socket}, clients) do
-    list = Enum.filter(clients, &(&1 !== socket))
-    {:noreply, list}
+  def handle_cast({:remove, username, client}, clients) do
+    existing_clients =
+      case Map.fetch(clients, username) do
+        {:ok, c} -> c
+        :error -> []
+      end
+
+    new_clients = Enum.filter(existing_clients, &(&1 !== client))
+    {:noreply, Map.put(clients, username, new_clients)}
   end
 
   @impl true

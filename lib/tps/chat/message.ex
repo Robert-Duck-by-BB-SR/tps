@@ -1,5 +1,7 @@
 defmodule TPS.Chat.Message do
+  alias TPS.Repo
   alias TPS.Chat.Message
+  require Logger
   defstruct [:version, :convo, :key, :type, :message]
 
   def parse_incoming(<<method::8, rest::binary>>) do
@@ -9,6 +11,11 @@ defmodule TPS.Chat.Message do
 
       1 ->
         {:req, rest}
+
+      2 ->
+        Logger.warning("wtf")
+        Logger.warning(rest)
+        Repo.get_username(rest)
     end
   end
 

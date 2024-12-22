@@ -26,11 +26,7 @@ defmodule TPS do
     {:ok, client} = :gen_tcp.accept(socket)
     Logger.info("accepting connection to")
 
-    Task.start_link(fn ->
-      Chat.push_message(:connect, client)
-      read_line(client)
-    end)
-
+    Task.start_link(fn -> read_line(client) end)
     loop_acceptor(socket)
   end
 
@@ -41,8 +37,17 @@ defmodule TPS do
         message = String.trim(data)
 
         case Chat.Message.parse_incoming(message) do
-          {:message, m} -> Chat.push_message(:push, m)
-          {:req, r} -> "#{Chat.request(r)}\n" |> Chat.write_line(socket)
+          {:message, m} ->
+            Chat.push_message(:push, m)
+
+          {:req, r} ->
+            "#{Chat.request(r)}\n" |> Chat.write_line(socket)
+
+          {:connect, username} ->
+            Chat.push_message(:connect, {username, socket})
+
+          {:error, reason} ->
+            Chat.write_line("BAD REQUEST: #{reason}", socket)
         end
 
         read_line(socket)

@@ -10,47 +10,6 @@ defmodule TPS.Repo do
   end
 
   @impl true
-  def handle_call({:select, query, values}, _from, conn) do
-    {:ok, statement} =
-      conn
-      |> Exqlite.Sqlite3.prepare(query)
-
-    :ok = Exqlite.Sqlite3.bind(statement, values)
-
-    case Exqlite.Sqlite3.multi_step(conn, statement) do
-      {:error, reason} ->
-        Exqlite.Sqlite3.release(conn, statement)
-        {:stop, :error, reason, conn}
-
-      {_, result} ->
-        Exqlite.Sqlite3.release(conn, statement)
-        {:reply, result, conn}
-    end
-  end
-
-  @impl true
-  def handle_call({:get, query, values}, _from, conn) do
-    {:ok, statement} =
-      conn
-      |> Exqlite.Sqlite3.prepare(query)
-
-    :ok = Exqlite.Sqlite3.bind(statement, values)
-
-    case Exqlite.Sqlite3.step(conn, statement) do
-      {:error, reason} ->
-        Exqlite.Sqlite3.release(conn, statement)
-        {:stop, :error, reason, conn}
-
-      {:row, result} ->
-        Exqlite.Sqlite3.release(conn, statement)
-        {:reply, result, conn}
-
-      :done ->
-        {:reply, :success, conn}
-    end
-  end
-
-  @impl true
   def handle_call([["create", "conversation"], ["key", key], ["users", users]], _from, conn) do
     {:ok, decoded_key} = Base.decode16(key)
 
@@ -139,6 +98,18 @@ defmodule TPS.Repo do
   end
 
   @impl true
+  def handle_call({:convo, convo_id}, _from, conn) do
+    case Repo.Conversation.conversation_users(conn, convo_id) do
+      {:error, reason} ->
+        Logger.error(reason)
+        {:reply, {:error, reason}, conn}
+
+      {:ok, [users]} ->
+        {:reply, users, conn}
+    end
+  end
+
+  @impl true
   def handle_call([type, key, conversation, datetime, message], _from, conn) do
     {:ok, decoded_key} = Base.decode16(key)
 
@@ -149,6 +120,39 @@ defmodule TPS.Repo do
       {:error, reason} ->
         Logger.error(reason)
         {:reply, {:error, reason}, conn}
+    end
+  end
+
+  @impl true
+  def handle_call({:username, key}, _from, conn) do
+    {:ok, decoded_key} = Base.decode16(key)
+
+    case Repo.User.username(conn, decoded_key) do
+      {:ok, [username]} -> {:reply, {:connect, username}, conn}
+      {:error, reason} -> {:reply, {:error, reason}, conn}
+      :not_found -> {:reply, {:error, "user does not exist"}, conn}
+    end
+  end
+
+  @impl true
+  def handle_call({:get, query, values}, _from, conn) do
+    {:ok, statement} =
+      conn
+      |> Exqlite.Sqlite3.prepare(query)
+
+    :ok = Exqlite.Sqlite3.bind(statement, values)
+
+    case Exqlite.Sqlite3.step(conn, statement) do
+      {:error, reason} ->
+        Exqlite.Sqlite3.release(conn, statement)
+        {:stop, :error, reason, conn}
+
+      {:row, result} ->
+        Exqlite.Sqlite3.release(conn, statement)
+        {:reply, result, conn}
+
+      :done ->
+        {:reply, :success, conn}
     end
   end
 
@@ -166,5 +170,13 @@ defmodule TPS.Repo do
 
   def query(request) do
     GenServer.call(__MODULE__, request)
+  end
+
+  def get_conversation(convo_id) do
+    GenServer.call(__MODULE__, {:convo, convo_id})
+  end
+
+  def get_username(key) do
+    GenServer.call(__MODULE__, {:username, key})
   end
 end
