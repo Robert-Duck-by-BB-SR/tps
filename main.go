@@ -4,6 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"strings"
+
+	cht "github.com/Robert-Duck-by-BB-SR/tps/internal/chat"
+	"github.com/Robert-Duck-by-BB-SR/tps/internal/database"
+	"github.com/Robert-Duck-by-BB-SR/tps/internal/models"
+	"github.com/jmoiron/sqlx"
 )
 
 func assert(cond bool, expect string) {
@@ -15,11 +21,15 @@ func assert(cond bool, expect string) {
 var Connections = make(map[string][]net.Conn)
 
 func main() {
+	// TODO: separate user creation from running server possibly with cmd args
+
+	database.DB = sqlx.MustConnect("sqlite3", "testing.db")
+
 	listener, err := net.Listen("tcp4", ":6969")
 	assert(err != nil, "cannot listen")
 	defer listener.Close()
 
-	chat := Chat{}
+	chat := cht.Chat{}
 	go chat.Start()
 	for {
 		conn, err := listener.Accept()
@@ -28,12 +38,12 @@ func main() {
 			fmt.Println("Cannot accept a connection")
 			continue
 		}
-		go HandleConnection(conn)
+		go HandleConnection(&chat, conn)
 
 	}
 }
 
-func HandleConnection(conn net.Conn) {
+func HandleConnection(chat *cht.Chat, conn net.Conn) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
@@ -43,7 +53,7 @@ func HandleConnection(conn net.Conn) {
 			fmt.Println("Client disconnected")
 			break
 		}
-		go ParseIncoming([]byte(message))
+		go ParseIncoming(chat, conn, []byte(message))
 	}
 }
 
@@ -55,74 +65,42 @@ func WriteLine(conn net.Conn, message []byte) {
 	}
 }
 
-func ParseIncoming(message []byte) {
+func ParseIncoming(chat *cht.Chat, conn net.Conn, message []byte) {
 	switch message[0] {
 	case 0:
 		ParseMessage(message[1:])
 	case 1:
 		ParseRequest(message[1:])
 	case 2:
-		ConnectionRequest(message[1:])
+		ConnectionRequest(chat, message[1:], conn)
+	default:
+		WriteLine(conn, []byte("Bad request"))
 	}
 }
 
-func ParseMessage(message []byte) {
-
-}
-
-func ParseRequest(message []byte) {}
-
-func ConnectionRequest(message []byte) {
-
-}
-
-type Connection struct {
-	Username string
-	Conn     net.Conn
-}
-
-type Chat struct {
-	connections   map[string][]net.Conn
-	connection    chan Connection
-	disconnection chan Connection
-	// message     chan string
-	// response    chan string
-}
-
-func (c *Chat) Start() {
-	c.connections = make(map[string][]net.Conn)
-	c.connection = make(chan Connection)
-	for {
-		select {
-		case conn := <-c.connection:
-			c.connections[conn.Username] = append(c.connections[conn.Username], conn.Conn)
-		case dis := <-c.disconnection:
-
-			new_connections := c.connections[dis.Username]
-			i := -1
-			for j, conn := range new_connections {
-				if conn == dis.Conn {
-					i = j
-					break
-				}
-			}
-			if i != -1 {
-				new_connections = append(new_connections[:i], new_connections[i+1:]...)
-			}
-
-			c.connections[dis.Username] = new_connections
-		}
+func ParseMessage(message []byte) error {
+	request := string(message)
+	m := strings.Split(request, string([]byte{255}))
+	if len(m) < 2 {
+		return fmt.Errorf("Cannot parse message, got wrong length")
 	}
-}
 
-func (c *Chat) Connect(key string, socket net.Conn) error {
-	// TODO: retrieve username by key from db
-	c.connection <- Connection{Username: key, Conn: socket}
+	// key := m[0]
+	// text := m[1]
+
 	return nil
 }
 
-func (c *Chat) Disconnect(key string, socket net.Conn) error {
-	// TODO: retrieve username by key from db
-	c.connection <- Connection{Username: key, Conn: socket}
-	return nil
+func ParseRequest(message []byte) {
+	request := string(message)
+	_ = strings.Split(request, string([]byte{255}))
+	// TODO: use the above kv pairs to figure out what are we requesting
+}
+
+func ConnectionRequest(chat *cht.Chat, key []byte, conn net.Conn) error {
+	err, username := models.FetchUsername(string(key))
+	if err != nil {
+		return err
+	}
+	return chat.Connect(username, conn)
 }
