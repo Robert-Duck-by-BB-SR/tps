@@ -50,3 +50,7 @@ func (c *Chat) Disconnect(username string, socket net.Conn) error {
 	c.disconnection <- conn{Username: username, Conn: socket}
 	return nil
 }
+
+func (c *Chat) GetConnections(username string) []net.Conn {
+	return c.connections[username]
+}

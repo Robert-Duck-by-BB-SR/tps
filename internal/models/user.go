@@ -15,7 +15,7 @@ type User struct {
 func FetchUsername(key string) (error, string) {
 	var username string
 
-	if err := database.DB.Get("select username from user where key=?", key); err != nil {
+	if err := database.DB.Get(&username, "select username from user where key=?", key); err != nil {
 		log.Println("cannot find username: ", err)
 		return err, ""
 	}
