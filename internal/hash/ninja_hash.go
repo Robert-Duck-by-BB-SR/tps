@@ -11,7 +11,7 @@ func abs(a, b byte) byte {
 func Encode(left, right []byte) []byte {
 	var result []byte
 
-	if len(right) > len(left) {
+	if len(right) < len(left) {
 		tmp := left
 		left = right
 		right = tmp

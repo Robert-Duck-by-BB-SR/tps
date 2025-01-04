@@ -13,7 +13,7 @@ type Message struct {
 	Content                          []byte
 }
 
-func CreateMessage(t, user, conversation, datetime, message string) error {
+func CreateMessage(t byte, user, conversation, datetime string, message []byte) error {
 	id := uuid.NewString()
 	if _, err := database.DB.Exec(
 		"insert into message values (?, ?, ?, ?, ?, ?)",
@@ -24,6 +24,7 @@ func CreateMessage(t, user, conversation, datetime, message string) error {
 }
 
 func FetchMessages(conversation string) (error, []Message) {
+	log.Println("looking for messages in:", conversation)
 	var messages []Message
 
 	if err := database.DB.Select(&messages, "select * from message where conversation=?", conversation); err != nil {

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/hex"
 	"log"
 
 	"github.com/Robert-Duck-by-BB-SR/tps/internal/database"
@@ -12,10 +13,19 @@ type User struct {
 	Key      []byte
 }
 
-func FetchUsername(key string) (error, string) {
+func FetchUsername(key_hex string) (error, string) {
+	log.Println("decoding:", key_hex)
+	key, err := hex.DecodeString(key_hex)
+	if err != nil {
+		log.Println("Cannot decode key, ", err)
+		return err, ""
+	}
+
+	log.Println("decoded", key)
+
 	var username string
 
-	if err := database.DB.Get(&username, "select username from user where key=?", key); err != nil {
+	if err = database.DB.Get(&username, "select username from user where key=?", key); err != nil {
 		log.Println("cannot find username: ", err)
 		return err, ""
 	}
@@ -30,4 +40,13 @@ func FetchUsers() (error, []string) {
 		return err, []string{}
 	}
 	return nil, users
+}
+
+func CreateUser(id, username string, key [32]byte) error {
+	if _, err := database.DB.Exec(
+		"insert into user values (?, ?, ?)",
+		id, username, key[:]); err != nil {
+		log.Println("user was not created: ", err)
+	}
+	return nil
 }

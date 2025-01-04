@@ -3,6 +3,7 @@ package chat
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 	"time"
@@ -29,14 +30,19 @@ type Chat struct {
 }
 
 func (c *Chat) Start() {
+	log.Println("Starting tps server")
 	c.connections = make(map[string][]net.Conn)
 	c.create_connection = make(chan conn)
+	c.get_connection = make(chan user_chan)
 	for {
 		select {
 		case conn := <-c.create_connection:
+			log.Println("creating connection")
 			c.connections[conn.username] = append(c.connections[conn.username], conn.socket)
+			log.Println(c.connections)
 		case dis := <-c.delete_connection:
 
+			log.Println("creating disconnections")
 			new_connections := c.connections[dis.username]
 			i := -1
 			for j, conn := range new_connections {
@@ -51,6 +57,7 @@ func (c *Chat) Start() {
 
 			c.connections[dis.username] = new_connections
 		case user := <-c.get_connection:
+			log.Println("fetching users")
 			user.conn <- c.connections[user.username]
 		}
 	}
@@ -88,15 +95,18 @@ func (chat *Chat) HandleConnection(conn net.Conn) {
 }
 
 func (chat *Chat) parse_incoming(conn net.Conn, message []byte) {
+	log.Println("incoming,", message)
 	switch message[0] {
 	case 0:
-		chat.parse_message(conn, message[1:])
+		chat.parse_message(conn, message[1:len(message)-1])
 	case 1:
 		chat.parse_request(conn, message[1:])
 	case 2:
-		err := chat.connection_request(message[1:], conn)
+		key := message[1 : len(message)-1]
+		err := chat.connection_request(key, conn)
 		if err != nil {
 			write_line(conn, []byte(fmt.Sprint("Could not create a connection: ", err)))
+			return
 		}
 	default:
 		write_line(conn, []byte("Bad request"))
@@ -104,26 +114,30 @@ func (chat *Chat) parse_incoming(conn net.Conn, message []byte) {
 }
 
 func (chat *Chat) parse_message(conn net.Conn, message []byte) {
-	request := string(message)
+	request := strings.Trim(string(message), "\n")
 	m := strings.Split(request, string([]byte{255})) // we're are going to use 0-127 (ascii) so 255 should be safe as a separator
-	if len(m) < 4 {                                  // type, key, conversation id, message itself
+	log.Println("parsing message:", m)
+	if len(m) < 4 { // type, key, conversation id, message itself
 		write_line(conn, []byte("Cannot parse message, got wrong length"))
+		return
 	}
 
 	key := m[0]
 	conversation := m[1]
-	t := m[2] // typpppee
-	text := m[3]
+	t := []byte(m[2]) // typpppee
+	text := []byte(m[3])
 
-	err, user := models.FetchUsername(key)
+	err, user := models.FetchUsername(string(key))
 	if err != nil {
 		write_line(conn, []byte("Could not find user with such key"))
+		return
 	}
 
 	datetime := time.Now().Format("2006-01-02 15:04")
-	err = models.CreateMessage(t, user, conversation, datetime, text)
+	err = models.CreateMessage(t[0], user, conversation, datetime, text)
 	if err != nil {
 		write_line(conn, []byte("could not send message, we are checking"))
+		return
 	}
 
 	_, users := models.FetchConversationUsers(conversation)
@@ -144,16 +158,17 @@ func (chat *Chat) parse_message(conn net.Conn, message []byte) {
 }
 
 func (chat *Chat) parse_request(conn net.Conn, message []byte) {
-	request := string(message)
+	request := strings.Trim(string(message), "\n")
 	data := strings.Split(request, string([]byte{255}))
+	log.Println("data:", data)
 	if len(data) < 3 {
 		write_line(conn, []byte("Cannot parse request, got wrong length"))
 		return
 	}
 	key := data[0]
-	err, username := models.FetchUsername(key)
+	err, username := models.FetchUsername(string(key))
 	if err != nil {
-		write_line(conn, []byte("Unregistered user"))
+		write_line(conn, []byte("Bad user"))
 		return
 	}
 	request_type := data[1]
@@ -161,14 +176,16 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 	switch request_type {
 	case "get":
 		receiver := data[2]
+		var builder strings.Builder
 		switch receiver {
 		case "message":
 			if len(data) < 4 {
 				write_line(conn, []byte("request for messages got no conversation"))
 				return
 			}
-			_, messages := models.FetchMessages(username)
-			var builder strings.Builder
+			log.Println(data)
+			_, messages := models.FetchMessages(data[3])
+			log.Println("got:", messages)
 			for _, messages := range messages {
 				builder.WriteByte(messages.Type)
 				builder.WriteByte(255)
@@ -181,7 +198,6 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 				builder.WriteString(string(messages.Content))
 				builder.WriteByte(254)
 			}
-			write_line(conn, []byte(builder.String()))
 		case "conversation":
 			_, conversations := models.FetchConversationsByUsername(username)
 			var builder strings.Builder
@@ -191,7 +207,6 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 				builder.WriteString(conv.Users)
 				builder.WriteByte(254)
 			}
-			write_line(conn, []byte(builder.String()))
 		case "users":
 			_, users := models.FetchUsers()
 			var builder strings.Builder
@@ -199,13 +214,14 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 				builder.WriteString(user)
 				builder.WriteByte(254)
 			}
-			write_line(conn, []byte(builder.String()))
 		}
+		write_line(conn, []byte(builder.String()), []byte{'\n'})
 
 	case "create":
 		users := data[2]
 		id := uuid.NewString()
 		models.CreateConversation(id, fmt.Sprintf("%s|%s", username, users))
+		write_line(conn, []byte(id))
 	}
 
 }
@@ -220,17 +236,20 @@ func (chat *Chat) connection_request(key []byte, conn net.Conn) error {
 }
 
 func write_line(conn net.Conn, parts ...[]byte) {
-	for _, part := range parts {
+	for i, part := range parts {
 		_, err := conn.Write(part)
 		if err != nil {
 			fmt.Println("Error writing to client:", err)
 		}
-		_, err = conn.Write([]byte{255})
-		if err != nil {
-			fmt.Println("Error writing to client:", err)
+		if i != len(parts)-1 {
+			_, err = conn.Write([]byte{255})
+			if err != nil {
+				fmt.Println("Error writing to client:", err)
+			}
 		}
 	}
 
+	log.Println("i don't know what is happening at this point", parts)
 	_, err := conn.Write([]byte{'\n'})
 	if err != nil {
 		fmt.Println("Error writing to client:", err)
