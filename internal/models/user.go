@@ -35,7 +35,7 @@ func FetchUsername(key_hex string) (error, string) {
 
 func FetchUsers() (error, []string) {
 	var users []string
-	if err := database.DB.Get(&users, "select username from user"); err != nil {
+	if err := database.DB.Select(&users, "select username from user"); err != nil {
 		log.Println("cannot fetch users: ", err)
 		return err, []string{}
 	}

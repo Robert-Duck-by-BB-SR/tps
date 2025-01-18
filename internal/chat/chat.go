@@ -209,12 +209,12 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 			}
 		case "users":
 			_, users := models.FetchUsers()
-			var builder strings.Builder
 			for _, user := range users {
 				builder.WriteString(user)
 				builder.WriteByte(254)
 			}
 		}
+		log.Println(builder.String())
 		write_line(conn, []byte(builder.String()), []byte{'\n'})
 
 	case "create":
