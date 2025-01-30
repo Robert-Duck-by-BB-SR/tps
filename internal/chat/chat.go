@@ -103,11 +103,12 @@ func (chat *Chat) parse_incoming(conn net.Conn, message []byte) {
 		chat.parse_request(conn, message[1:])
 	case 2:
 		key := message[1 : len(message)-1]
-		err := chat.connection_request(key, conn)
+		err, username := chat.connection_request(key, conn)
 		if err != nil {
 			write_line(conn, []byte(fmt.Sprint("Could not create a connection: ", err)))
 			return
 		}
+		write_line(conn, []byte(username))
 	default:
 		write_line(conn, []byte("Bad request"))
 	}
@@ -171,6 +172,7 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 		write_line(conn, []byte("Bad user"))
 		return
 	}
+	log.Println("proceding with the request")
 	request_type := data[1]
 
 	switch request_type {
@@ -199,8 +201,10 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 				builder.WriteByte(254)
 			}
 		case "conversation":
-			_, conversations := models.FetchConversationsByUsername(username)
-			var builder strings.Builder
+			err, conversations := models.FetchConversationsByUsername(username)
+			if err != nil {
+				log.Println("cannot get convos", err)
+			}
 			for _, conv := range conversations {
 				builder.WriteString(conv.Id)
 				builder.WriteByte(255)
@@ -215,7 +219,7 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 			}
 		}
 		log.Println(builder.String())
-		write_line(conn, []byte(builder.String()), []byte{'\n'})
+		write_line(conn, []byte(builder.String()))
 
 	case "create":
 		users := data[2]
@@ -226,31 +230,27 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 
 }
 
-func (chat *Chat) connection_request(key []byte, conn net.Conn) error {
+func (chat *Chat) connection_request(key []byte, conn net.Conn) (error, string) {
 	err, username := models.FetchUsername(string(key))
 	if err != nil {
-		return err
+		return err, ""
 	}
 	chat.connect(username, conn)
-	return nil
+	return nil, username
 }
 
 func write_line(conn net.Conn, parts ...[]byte) {
+	var builder []byte
 	for i, part := range parts {
-		_, err := conn.Write(part)
-		if err != nil {
-			fmt.Println("Error writing to client:", err)
-		}
+		builder = append(builder, part...)
 		if i != len(parts)-1 {
-			_, err = conn.Write([]byte{255})
-			if err != nil {
-				fmt.Println("Error writing to client:", err)
-			}
+			builder = append(builder, 255)
 		}
 	}
 
-	log.Println("i don't know what is happening at this point", parts)
-	_, err := conn.Write([]byte{'\n'})
+	builder = append(builder, '\n')
+	log.Println("i don't know what is happening at this point", builder)
+	_, err := conn.Write(builder)
 	if err != nil {
 		fmt.Println("Error writing to client:", err)
 	}

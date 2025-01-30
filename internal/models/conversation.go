@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/Robert-Duck-by-BB-SR/tps/internal/database"
@@ -20,8 +21,9 @@ func FetchConversationUsers(id string) (error, string) {
 }
 
 func FetchConversationsByUsername(username string) (error, []Conversation) {
+	log.Println("looking for conversations contaning:", len(username))
 	var conversations []Conversation
-	if err := database.DB.Select(&conversations, "select * from conversation where users like '%?%'", username); err != nil {
+	if err := database.DB.Select(&conversations, "select * from conversation where users like ?", fmt.Sprintf("%%%s%%", username)); err != nil {
 		log.Println("could not fetch users from conversation: ", err)
 		return err, []Conversation{}
 	}
