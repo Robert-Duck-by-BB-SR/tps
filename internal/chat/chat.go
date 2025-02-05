@@ -181,6 +181,7 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 		var builder strings.Builder
 		switch receiver {
 		case "message":
+			builder.WriteByte(251)
 			if len(data) < 4 {
 				write_line(conn, []byte("request for messages got no conversation"))
 				return
@@ -201,6 +202,7 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 				builder.WriteByte(254)
 			}
 		case "conversation":
+			builder.WriteByte(252)
 			err, conversations := models.FetchConversationsByUsername(username)
 			if err != nil {
 				log.Println("cannot get convos", err)
@@ -212,6 +214,7 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 				builder.WriteByte(254)
 			}
 		case "users":
+			builder.WriteByte(253)
 			_, users := models.FetchUsers()
 			for _, user := range users {
 				builder.WriteString(user)
@@ -225,7 +228,7 @@ func (chat *Chat) parse_request(conn net.Conn, message []byte) {
 		users := data[2]
 		id := uuid.NewString()
 		models.CreateConversation(id, fmt.Sprintf("%s|%s", username, users))
-		write_line(conn, []byte(id))
+		write_line(conn, []byte{250}, []byte(id))
 	}
 
 }
